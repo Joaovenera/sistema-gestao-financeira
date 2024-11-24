@@ -1,28 +1,34 @@
 const jwt = require('jsonwebtoken');
-const { ERROR_MESSAGES } = require('../utils/constants');
-const logger = require('../utils/logger');
 const User = require('../models/User');
+const logger = require('../utils/logger');
 
 const authMiddleware = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    const authHeader = req.headers.authorization;
 
-    if (!token) {
-      return res.status(401).json({ error: ERROR_MESSAGES.TOKEN_REQUIRED });
+    if (!authHeader) {
+      return res.status(401).json({ message: 'Token não fornecido' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
+    const [, token] = authHeader.split(' ');
 
-    if (!user || user.status !== 'active') {
-      return res.status(401).json({ error: ERROR_MESSAGES.INVALID_TOKEN });
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await User.findById(decoded.id);
+
+      if (!user) {
+        return res.status(401).json({ message: 'Usuário não encontrado' });
+      }
+
+      req.user = user;
+      return next();
+    } catch (error) {
+      logger.error('Token verification error:', error);
+      return res.status(401).json({ message: 'Token inválido' });
     }
-
-    req.user = user;
-    next();
   } catch (error) {
     logger.error('Auth middleware error:', error);
-    res.status(401).json({ error: ERROR_MESSAGES.INVALID_TOKEN });
+    return res.status(500).json({ message: 'Erro interno do servidor' });
   }
 };
 

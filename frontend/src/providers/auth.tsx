@@ -1,47 +1,29 @@
+'use client'
+
 import { createContext, useContext, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 
 interface User {
-  id: string
+  id: number
   name: string
   email: string
 }
 
-interface AuthContextType {
+interface AuthContextData {
   user: User | null
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => void
-  isLoading: boolean
+  isAuthenticated: boolean
 }
 
-const AuthContext = createContext<AuthContextType>({} as AuthContextType)
+const AuthContext = createContext({} as AuthContextData)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  useEffect(() => {
-    const token = localStorage.getItem('@FinancialApp:token')
-    
-    if (token) {
-      api.defaults.headers.common.Authorization = `Bearer ${token}`
-      
-      api.get('/users/me')
-        .then(response => {
-          setUser(response.data)
-        })
-        .catch(() => {
-          signOut()
-        })
-        .finally(() => {
-          setIsLoading(false)
-        })
-    } else {
-      setIsLoading(false)
-    }
-  }, [])
+  const isAuthenticated = !!user
 
   async function signIn(email: string, password: string) {
     try {
@@ -52,28 +34,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { token, user } = response.data
 
-      localStorage.setItem('@FinancialApp:token', token)
-      api.defaults.headers.common.Authorization = `Bearer ${token}`
+      localStorage.setItem('@FinanceApp:token', token)
+      api.defaults.headers['Authorization'] = `Bearer ${token}`
 
       setUser(user)
       router.push('/dashboard')
     } catch (error) {
+      console.error('Erro no login:', error)
       throw error
     }
   }
 
   function signOut() {
-    localStorage.removeItem('@FinancialApp:token')
-    delete api.defaults.headers.common.Authorization
     setUser(null)
+    localStorage.removeItem('@FinanceApp:token')
+    delete api.defaults.headers['Authorization']
     router.push('/login')
   }
 
+  useEffect(() => {
+    const token = localStorage.getItem('@FinanceApp:token')
+
+    if (token) {
+      api.defaults.headers['Authorization'] = `Bearer ${token}`
+      api.get('/users/me').then(response => {
+        setUser(response.data)
+      })
+    }
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, signIn, signOut, isLoading }}>
+    <AuthContext.Provider value={{ user, signIn, signOut, isAuthenticated }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-export const useAuth = () => useContext(AuthContext) 
+export function useAuth() {
+  const context = useContext(AuthContext)
+
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+
+  return context
+} 

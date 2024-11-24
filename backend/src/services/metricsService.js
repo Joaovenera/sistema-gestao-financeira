@@ -1,30 +1,65 @@
-const express = require('express');
 const os = require('os');
+const { pool } = require('../config/database');
+const logger = require('../utils/logger');
 
-const setupMetricsServer = () => {
-  const metricsApp = express();
-  const metricsPort = process.env.METRICS_PORT || 9090;
+const metricsService = {
+  async collectMetrics() {
+    try {
+      const systemMetrics = this.getSystemMetrics();
+      const dbMetrics = await this.getDatabaseMetrics();
+      const appMetrics = await this.getApplicationMetrics();
 
-  metricsApp.get('/metrics', (req, res) => {
-    const metrics = {
-      process: {
-        uptime: process.uptime(),
-        memory: process.memoryUsage(),
-        cpu: process.cpuUsage()
+      return {
+        timestamp: new Date(),
+        system: systemMetrics,
+        database: dbMetrics,
+        application: appMetrics
+      };
+    } catch (error) {
+      logger.error('Error collecting metrics:', error);
+      throw error;
+    }
+  },
+
+  getSystemMetrics() {
+    return {
+      cpuUsage: os.loadavg(),
+      memoryUsage: {
+        total: os.totalmem(),
+        free: os.freemem(),
+        used: os.totalmem() - os.freemem()
       },
-      system: {
-        totalMemory: os.totalmem(),
-        freeMemory: os.freemem(),
-        loadAvg: os.loadavg(),
-        cpus: os.cpus().length
-      },
-      timestamp: new Date()
+      uptime: os.uptime()
     };
+  },
 
-    res.json(metrics);
-  });
+  async getDatabaseMetrics() {
+    const [result] = await pool.query('SHOW STATUS');
+    const metrics = {};
+    
+    result.forEach(row => {
+      metrics[row.Variable_name] = row.Value;
+    });
 
-  metricsApp.listen(metricsPort);
+    return metrics;
+  },
+
+  async getApplicationMetrics() {
+    const [activeUsers] = await pool.query(
+      'SELECT COUNT(*) as count FROM users WHERE last_login > DATE_SUB(NOW(), INTERVAL 24 HOUR)'
+    );
+
+    const [transactionsToday] = await pool.query(
+      'SELECT COUNT(*) as count FROM transactions WHERE created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)'
+    );
+
+    return {
+      activeUsers: activeUsers[0].count,
+      transactionsToday: transactionsToday[0].count,
+      processUptime: process.uptime(),
+      memoryUsage: process.memoryUsage()
+    };
+  }
 };
 
-module.exports = { setupMetricsServer }; 
+module.exports = metricsService; 

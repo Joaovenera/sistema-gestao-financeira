@@ -2,9 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const compression = require('compression');
-const rateLimit = require('express-rate-limit');
-const RedisStore = require('rate-limit-redis');
-const Redis = require('redis');
+const { createClient } = require('redis');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsDoc = require('swagger-jsdoc');
 const routes = require('./routes');
@@ -21,9 +19,9 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Configuração do Redis
-const redisClient = Redis.createClient({
+const redisClient = createClient({
   url: process.env.REDIS_URL,
-  password: process.env.REDIS_PASSWORD
+  password: process.env.REDIS_PASSWORD || undefined
 });
 
 // Configuração do Swagger
@@ -47,73 +45,52 @@ const swaggerOptions = {
 
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
-// Rate limiting
-const limiter = rateLimit({
-  store: new RedisStore({
-    client: redisClient,
-    prefix: 'rate_limit:'
-  }),
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10),
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10)
-});
-
-// Middlewares
-app.use(cors());
-app.use(compression());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(limiter);
-
-// Documentação Swagger
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
-
-// Rotas
-app.use('/api', routes);
-
-// Health check
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    timestamp: new Date(),
-    version: process.env.npm_package_version,
-    environment: process.env.NODE_ENV
-  });
-});
-
-// Error handling
-app.use(errorHandler);
-
 // Inicialização do servidor
 const startServer = async () => {
   try {
-    // Inicializar APM
+    // Conectar ao Redis primeiro
+    await redisClient.connect();
+    logger.info('Redis connected successfully');
+
+    // Middlewares básicos
+    app.use(cors());
+    app.use(compression());
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
+
+    // Documentação Swagger
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
+    // Rotas
+    app.use('/api', routes);
+
+    // Health check
+    app.get('/health', (req, res) => {
+      res.json({
+        status: 'OK',
+        timestamp: new Date(),
+        version: process.env.npm_package_version,
+        environment: process.env.NODE_ENV
+      });
+    });
+
+    // Error handling
+    app.use(errorHandler);
+
+    // Inicializar outros serviços
     if (process.env.APM_ENABLED === 'true') {
       setupAPM();
       logger.info('APM initialized');
     }
 
-    // Inicializar Tracing
-    if (process.env.TRACING_ENABLED === 'true') {
-      setupTracing();
-      logger.info('Distributed tracing initialized');
-    }
-
-    // Configurar agregação de logs
     setupLogAggregation();
     
-    // Conectar ao Redis
-    await redisClient.connect();
-    logger.info('Redis connected successfully');
-
-    // Testar conexão com o banco
     await testConnection();
     logger.info('Database connected successfully');
 
-    // Configurar jobs agendados
     setupScheduledJobs();
     logger.info('Scheduled jobs configured');
 
-    // Configurar servidor de métricas
     if (process.env.ENABLE_METRICS === 'true') {
       setupMetricsServer();
       logger.info('Metrics server started');
@@ -144,7 +121,6 @@ process.on('uncaughtException', (error) => {
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received. Starting graceful shutdown...');
   
-  // Fechar conexões
   await redisClient.quit();
   await pool.end();
   

@@ -20,31 +20,32 @@ class BaseModel {
     }
   }
 
-  async findOne(conditions) {
+  async findAll(filters = {}) {
     try {
-      const entries = Object.entries(conditions);
-      const where = entries.map(([key]) => `${key} = ?`).join(' AND ');
-      const values = entries.map(([_, value]) => value);
+      let query = `SELECT * FROM ${this.tableName} WHERE 1=1`;
+      const params = [];
 
-      const [rows] = await this.pool.execute(
-        `SELECT * FROM ${this.tableName} WHERE ${where} LIMIT 1`,
-        values
-      );
-      return rows[0];
+      Object.entries(filters).forEach(([key, value]) => {
+        query += ` AND ${key} = ?`;
+        params.push(value);
+      });
+
+      const [rows] = await this.pool.execute(query, params);
+      return rows;
     } catch (error) {
-      logger.error(`Error finding ${this.tableName}:`, error);
+      logger.error(`Error finding all ${this.tableName}:`, error);
       throw error;
     }
   }
 
   async create(data) {
     try {
-      const keys = Object.keys(data);
+      const columns = Object.keys(data).join(', ');
+      const placeholders = Object.keys(data).map(() => '?').join(', ');
       const values = Object.values(data);
-      const placeholders = keys.map(() => '?').join(', ');
 
       const [result] = await this.pool.execute(
-        `INSERT INTO ${this.tableName} (${keys.join(', ')}) VALUES (${placeholders})`,
+        `INSERT INTO ${this.tableName} (${columns}) VALUES (${placeholders})`,
         values
       );
 
@@ -57,12 +58,11 @@ class BaseModel {
 
   async update(id, data) {
     try {
-      const entries = Object.entries(data);
-      const set = entries.map(([key]) => `${key} = ?`).join(', ');
-      const values = [...entries.map(([_, value]) => value), id];
+      const sets = Object.keys(data).map(key => `${key} = ?`).join(', ');
+      const values = [...Object.values(data), id];
 
       const [result] = await this.pool.execute(
-        `UPDATE ${this.tableName} SET ${set} WHERE id = ?`,
+        `UPDATE ${this.tableName} SET ${sets} WHERE id = ?`,
         values
       );
 
@@ -79,6 +79,7 @@ class BaseModel {
         `DELETE FROM ${this.tableName} WHERE id = ?`,
         [id]
       );
+
       return result.affectedRows > 0;
     } catch (error) {
       logger.error(`Error deleting ${this.tableName}:`, error);

@@ -7,13 +7,11 @@ class User extends BaseModel {
   }
 
   async findByEmail(email) {
-    return this.findOne({ email });
-  }
-
-  async create(userData) {
-    const { password, ...rest } = userData;
-    const hashedPassword = await bcrypt.hash(password, 10);
-    return super.create({ ...rest, password: hashedPassword });
+    const [rows] = await this.pool.execute(
+      'SELECT * FROM users WHERE email = ?',
+      [email]
+    );
+    return rows[0];
   }
 
   async validatePassword(user, password) {

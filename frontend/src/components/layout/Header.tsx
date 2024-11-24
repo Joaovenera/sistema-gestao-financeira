@@ -1,20 +1,17 @@
-import { useAuth } from '@/providers/auth'
+'use client'
+
 import { ThemeToggle } from '../shared/ThemeToggle'
 import { UserMenu } from '../shared/UserMenu'
-import { NotificationBell } from '../shared/NotificationBell'
+import { useAuth } from '@/providers/auth'
 
 export function Header() {
   const { user } = useAuth()
 
   return (
     <header className="h-16 border-b bg-card">
-      <div className="container h-full flex items-center justify-between">
+      <div className="h-full container flex items-center justify-between">
+        <div>Logo</div>
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold">Financial App</h1>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <NotificationBell />
           <ThemeToggle />
           <UserMenu user={user} />
         </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useAuth } from '@/providers/auth'
+import { Button } from '../ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,40 +9,35 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Button } from '@/components/ui/button'
-import { User, Settings, LogOut } from 'lucide-react'
+} from '../ui/dropdown-menu'
+import { User } from 'lucide-react'
 
-export function UserMenu() {
-  const { user, signOut } = useAuth()
+interface UserMenuProps {
+  user: {
+    name: string
+    email: string
+  } | null
+}
+
+export function UserMenu({ user }: UserMenuProps) {
+  const { signOut } = useAuth()
 
   if (!user) return null
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+        <Button variant="ghost" size="icon">
           <User className="h-5 w-5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.name}</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              {user.email}
-            </p>
-          </div>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>{user.name}</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-sm font-normal text-muted-foreground">
+          {user.email}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          <Settings className="mr-2 h-4 w-4" />
-          <span>Configurações</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={signOut}>
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Sair</span>
-        </DropdownMenuItem>
+        <DropdownMenuItem onClick={signOut}>Sair</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

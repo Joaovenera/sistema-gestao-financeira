@@ -95,7 +95,7 @@ jobs:
     - name: Run CodeQL Analysis
       uses: github/codeql-action/analyze@v2
       with:
-        languages: javascript
+        category: javascript
         
     - name: Run SonarCloud Scan
       uses: SonarSource/sonarcloud-github-action@master

@@ -4,29 +4,20 @@ const logger = require('../utils/logger');
 const logService = {
   async logActivity(data) {
     try {
-      const { user_id, action, entity_type, entity_id, details, ip_address } = data;
+      const { user_id, action, entity_type = 'auth', entity_id = null, details = null, ip_address } = data;
       
       await ActivityLog.create({
         user_id,
         action,
         entity_type,
         entity_id,
-        details: JSON.stringify(details),
+        details: details ? JSON.stringify(details) : null,
         ip_address
       });
 
       logger.info('Activity logged:', { ...data });
     } catch (error) {
       logger.error('Error logging activity:', error);
-    }
-  },
-
-  async getActivityLogs(filters) {
-    try {
-      return await ActivityLog.findWithFilters(filters);
-    } catch (error) {
-      logger.error('Error getting activity logs:', error);
-      throw error;
     }
   }
 };

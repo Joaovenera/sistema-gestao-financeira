@@ -1,15 +1,14 @@
-const metricsService = require('../services/advancedMetricsService');
 const logger = require('../utils/logger');
+const metricsService = require('../services/metricsService');
 
 const metricsController = {
-  getMetrics: async (req, res) => {
+  async getMetrics(req, res) {
     try {
-      const metrics = await metricsService.register.metrics();
-      res.set('Content-Type', metricsService.register.contentType);
-      res.end(metrics);
+      const metrics = await metricsService.collectMetrics();
+      res.json(metrics);
     } catch (error) {
-      logger.error('Error collecting metrics:', error);
-      res.status(500).json({ error: 'Erro ao coletar métricas' });
+      logger.error('Error getting metrics:', error);
+      res.status(500).json({ message: 'Erro ao buscar métricas' });
     }
   }
 };
