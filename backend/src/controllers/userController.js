@@ -32,13 +32,12 @@ const userController = {
         }
       }
 
-      const updated = await User.update(req.user.id, { name, email });
+      await User.update(req.user.id, { name, email });
+      
+      const updatedUser = await User.findById(req.user.id);
+      const { password, ...userData } = updatedUser;
 
-      if (!updated) {
-        return res.status(404).json({ message: 'Usuário não encontrado' });
-      }
-
-      res.json({ message: 'Perfil atualizado com sucesso' });
+      res.json(userData);
     } catch (error) {
       logger.error('Error updating user profile:', error);
       res.status(500).json({ message: 'Erro ao atualizar perfil' });

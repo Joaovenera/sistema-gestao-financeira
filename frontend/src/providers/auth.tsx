@@ -1,8 +1,9 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { api } from '@/lib/api'
 import { useRouter } from 'next/navigation'
+import { Loader2 } from 'lucide-react'
 
 interface User {
   id: number
@@ -15,17 +16,41 @@ interface AuthContextData {
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => void
   isAuthenticated: boolean
+  isLoading: boolean
 }
 
-const AuthContext = createContext({} as AuthContextData)
+export const AuthContext = createContext({} as AuthContextData)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  const isAuthenticated = !!user
+  const checkAuth = useCallback(async () => {
+    try {
+      const cookies = document.cookie.split(';')
+      const token = cookies.find(c => c.trim().startsWith('@FinanceApp:token='))?.split('=')[1]
+      
+      if (!token) {
+        setUser(null)
+        setIsLoading(false)
+        return
+      }
 
-  async function signIn(email: string, password: string) {
+      api.defaults.headers['Authorization'] = `Bearer ${token}`
+      const response = await api.get('/users/me')
+      setUser(response.data)
+    } catch (error) {
+      console.error('Erro na verificação de autenticação:', error)
+      setUser(null)
+      document.cookie = '@FinanceApp:token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      delete api.defaults.headers['Authorization']
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  const signIn = async (email: string, password: string) => {
     try {
       const response = await api.post('/auth/login', {
         email,
@@ -34,48 +59,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { token, user } = response.data
 
-      localStorage.setItem('@FinanceApp:token', token)
+      document.cookie = `@FinanceApp:token=${token}; path=/; max-age=86400`
       api.defaults.headers['Authorization'] = `Bearer ${token}`
-
       setUser(user)
-      router.push('/dashboard')
-    } catch (error) {
+      
+      return user
+    } catch (error: any) {
       console.error('Erro no login:', error)
-      throw error
+      throw new Error(error.response?.data?.message || 'Credenciais inválidas ou erro de conexão')
     }
   }
 
-  function signOut() {
+  const signOut = useCallback(() => {
     setUser(null)
-    localStorage.removeItem('@FinanceApp:token')
+    document.cookie = '@FinanceApp:token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
     delete api.defaults.headers['Authorization']
     router.push('/login')
-  }
+  }, [router])
 
   useEffect(() => {
-    const token = localStorage.getItem('@FinanceApp:token')
+    checkAuth()
+  }, [checkAuth])
 
-    if (token) {
-      api.defaults.headers['Authorization'] = `Bearer ${token}`
-      api.get('/users/me').then(response => {
-        setUser(response.data)
-      })
-    }
-  }, [])
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    )
+  }
 
   return (
-    <AuthContext.Provider value={{ user, signIn, signOut, isAuthenticated }}>
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        signIn, 
+        signOut, 
+        isAuthenticated: !!user, 
+        isLoading 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
 }
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext)
-
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error('useAuth deve ser usado dentro de um AuthProvider')
   }
-
   return context
 } 

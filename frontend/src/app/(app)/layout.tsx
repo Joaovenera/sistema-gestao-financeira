@@ -1,23 +1,47 @@
-import { Header } from '@/components/layout/Header'
+'use client'
+
+import { useAuth } from '@/hooks/useAuth'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Sidebar } from '@/components/layout/Sidebar'
-import { AuthGuard } from '@/components/auth/AuthGuard'
 
 export default function AppLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return (
-    <AuthGuard>
-      <div className="min-h-screen">
-        <Header />
-        <div className="flex">
-          <Sidebar />
-          <main className="flex-1 p-6">
-            {children}
-          </main>
-        </div>
+  const { user, isLoading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    const token = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('@FinanceApp:token='))
+
+    if (!isLoading && !user && !token) {
+      router.replace('/login')
+    }
+  }, [user, isLoading, router])
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
-    </AuthGuard>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
+
+  return (
+    <div className="flex h-screen">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto p-8">
+        {children}
+      </main>
+    </div>
   )
 } 

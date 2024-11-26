@@ -4,7 +4,13 @@ const logger = require('../utils/logger');
 const transactionController = {
   async getTransactions(req, res) {
     try {
-      const transactions = await transactionService.getTransactions(req.user.id);
+      const { startDate, endDate, category, type } = req.query;
+      const transactions = await transactionService.getTransactions(req.user.id, {
+        startDate,
+        endDate,
+        category,
+        type
+      });
       res.json(transactions);
     } catch (error) {
       logger.error('Error getting transactions:', error);
@@ -24,7 +30,11 @@ const transactionController = {
 
   async updateTransaction(req, res) {
     try {
-      const transaction = await transactionService.updateTransaction(req.params.id, req.body);
+      const transaction = await transactionService.updateTransaction(
+        req.params.id,
+        req.user.id,
+        req.body
+      );
       res.json(transaction);
     } catch (error) {
       logger.error('Error updating transaction:', error);
@@ -34,7 +44,7 @@ const transactionController = {
 
   async deleteTransaction(req, res) {
     try {
-      await transactionService.deleteTransaction(req.params.id);
+      await transactionService.deleteTransaction(req.params.id, req.user.id);
       res.status(204).send();
     } catch (error) {
       logger.error('Error deleting transaction:', error);

@@ -1,17 +1,46 @@
-const BaseModel = require('./BaseModel');
+const { pool } = require('../config/database');
 const bcrypt = require('bcryptjs');
 
-class User extends BaseModel {
-  constructor() {
-    super('users');
+class User {
+  async findById(id) {
+    try {
+      const [rows] = await pool.execute(
+        'SELECT * FROM users WHERE id = ?',
+        [id]
+      );
+      return rows[0];
+    } catch (error) {
+      throw error;
+    }
   }
 
   async findByEmail(email) {
-    const [rows] = await this.pool.execute(
-      'SELECT * FROM users WHERE email = ?',
-      [email]
-    );
-    return rows[0];
+    try {
+      const [rows] = await pool.execute(
+        'SELECT * FROM users WHERE email = ?',
+        [email]
+      );
+      return rows[0];
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async update(id, data) {
+    try {
+      const fields = Object.keys(data)
+        .map(key => `${key} = ?`)
+        .join(', ');
+      const values = [...Object.values(data), id];
+
+      const [result] = await pool.execute(
+        `UPDATE users SET ${fields} WHERE id = ?`,
+        values
+      );
+      return result.affectedRows > 0;
+    } catch (error) {
+      throw error;
+    }
   }
 
   async validatePassword(user, password) {

@@ -1,39 +1,35 @@
 'use client'
 
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatCurrency } from "@/lib/utils"
+
+interface OverviewData {
+  name: string
+  total: number
+}
 
 interface OverviewProps {
-  data: {
-    name: string
-    total: number
-  }[]
+  data: OverviewData[]
 }
 
 export function Overview({ data }: OverviewProps) {
   return (
-    <ResponsiveContainer width="100%" height={350}>
-      <BarChart data={data}>
-        <XAxis
-          dataKey="name"
-          stroke="#888888"
-          fontSize={12}
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis
-          stroke="#888888"
-          fontSize={12}
-          tickLine={false}
-          axisLine={false}
-          tickFormatter={(value) => `R$${value}`}
-        />
-        <Bar
-          dataKey="total"
-          fill="currentColor"
-          radius={[4, 4, 0, 0]}
-          className="fill-primary"
-        />
-      </BarChart>
-    </ResponsiveContainer>
+    <Card>
+      <CardHeader>
+        <CardTitle>Visão Geral</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {data.map((item) => (
+            <div key={item.name} className="flex items-center justify-between">
+              <p className="text-sm font-medium">{item.name}</p>
+              <p className="text-sm text-muted-foreground">
+                {formatCurrency(item.total)}
+              </p>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 } 

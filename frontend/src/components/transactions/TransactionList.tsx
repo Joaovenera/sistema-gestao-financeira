@@ -1,61 +1,66 @@
 'use client'
 
-import { Transaction } from "@/types"
-import { formatCurrency } from "@/lib/utils"
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
+import { formatCurrency } from '@/lib/utils'
+import { ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
+import { Transaction } from '@/types/transaction'
 
 interface TransactionListProps {
   transactions: Transaction[]
-  limit?: number
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
 }
 
-export function TransactionList({ transactions, limit }: TransactionListProps) {
-  const displayTransactions = limit 
-    ? transactions.slice(0, limit)
-    : transactions
-
+export function TransactionList({
+  transactions,
+  currentPage,
+  totalPages,
+  onPageChange
+}: TransactionListProps) {
   return (
     <div className="space-y-4">
-      {displayTransactions.map((transaction) => (
+      {transactions.map((transaction) => (
         <div
           key={transaction.id}
           className="flex items-center justify-between p-4 rounded-lg border bg-card"
         >
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-full ${
-              transaction.type === 'INCOME' 
-                ? 'bg-green-100 text-green-600 dark:bg-green-900' 
-                : 'bg-red-100 text-red-600 dark:bg-red-900'
-            }`}>
-              {transaction.type === 'INCOME' ? (
-                <ArrowUpIcon className="h-4 w-4" />
-              ) : (
-                <ArrowDownIcon className="h-4 w-4" />
-              )}
-            </div>
+            {transaction.type === 'income' || transaction.type === 'INCOME' ? (
+              <ArrowUpCircle className="h-8 w-8 text-green-500" />
+            ) : (
+              <ArrowDownCircle className="h-8 w-8 text-red-500" />
+            )}
             <div>
               <p className="font-medium">{transaction.description}</p>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{transaction.category?.name}</span>
-                <span>•</span>
-                <span>{format(new Date(transaction.date), "dd 'de' MMMM", { locale: ptBR })}</span>
-              </div>
+              <p className="text-sm text-muted-foreground">
+                {transaction.category_name}
+              </p>
             </div>
           </div>
-          <div className={`text-right ${
-            transaction.type === 'INCOME' 
-              ? 'text-green-600' 
-              : 'text-red-600'
-          }`}>
-            <p className="font-medium">
-              {transaction.type === 'INCOME' ? '+' : '-'} 
-              {formatCurrency(transaction.amount)}
+
+          <div className="text-right">
+            <p
+              className={
+                transaction.type === 'income' || transaction.type === 'INCOME'
+                  ? 'text-green-500 font-medium'
+                  : 'text-red-500 font-medium'
+              }
+            >
+              {transaction.type === 'income' || transaction.type === 'INCOME' ? '+' : '-'}{' '}
+              {formatCurrency(Number(transaction.amount))}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {new Date(transaction.date).toLocaleDateString()}
             </p>
           </div>
         </div>
       ))}
+
+      {transactions.length === 0 && (
+        <div className="text-center py-8 text-muted-foreground">
+          Nenhuma transação encontrada
+        </div>
+      )}
     </div>
   )
 } 

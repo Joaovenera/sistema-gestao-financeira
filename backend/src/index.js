@@ -14,9 +14,10 @@ const logger = require('./utils/logger');
 const { setupTracing } = require('./services/tracingService');
 const { setupAPM } = require('./services/apmService');
 const { setupLogAggregation } = require('./services/logAggregationService');
+const initializeDatabase = require('./scripts/initDb');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3001;
 
 // Configuração do Redis
 const redisClient = createClient({
@@ -48,7 +49,11 @@ const swaggerDocs = swaggerJsDoc(swaggerOptions);
 // Inicialização do servidor
 const startServer = async () => {
   try {
-    // Conectar ao Redis primeiro
+    // Inicializar banco de dados
+    await initializeDatabase();
+    logger.info('Database initialized successfully');
+
+    // Conectar ao Redis
     await redisClient.connect();
     logger.info('Redis connected successfully');
 

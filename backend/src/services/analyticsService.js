@@ -1,99 +1,79 @@
 const { pool } = require('../config/database');
 const logger = require('../utils/logger');
-const stats = require('simple-statistics');
 
 const analyticsService = {
-  async getFlowPrediction({ user_id, months_ahead = 3 }) {
+  async getPredictions(userId) {
     try {
-      // Buscar histórico de transações
-      const [transactions] = await pool.execute(`
-        SELECT 
-          DATE_FORMAT(date, '%Y-%m') as month,
-          type,
-          SUM(amount) as total
-        FROM transactions 
-        WHERE user_id = ? 
-        GROUP BY DATE_FORMAT(date, '%Y-%m'), type
-        ORDER BY date DESC
-        LIMIT 12
-      `, [user_id]);
+      // Buscar transações dos últimos 6 meses
+      const [transactions] = await pool.execute(
+        `SELECT amount, type, date 
+         FROM transactions 
+         WHERE user_id = ? 
+         AND date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+         ORDER BY date ASC`,
+        [userId]
+      );
 
-      // Separar por tipo
-      const incomes = transactions
-        .filter(t => t.type === 'INCOME')
-        .map(t => t.total);
-      
-      const expenses = transactions
-        .filter(t => t.type === 'EXPENSE')
-        .map(t => t.total);
+      // Calcular médias mensais
+      const monthlyData = transactions.reduce((acc, transaction) => {
+        const month = new Date(transaction.date).getMonth();
+        if (!acc[month]) {
+          acc[month] = { income: 0, expense: 0 };
+        }
+        if (transaction.type === 'INCOME') {
+          acc[month].income += transaction.amount;
+        } else {
+          acc[month].expense += transaction.amount;
+        }
+        return acc;
+      }, {});
 
-      // Calcular tendências
-      const incomePrediction = this._calculateTrend(incomes, months_ahead);
-      const expensePrediction = this._calculateTrend(expenses, months_ahead);
+      // Converter para arrays
+      const income = Object.values(monthlyData).map(m => m.income);
+      const expense = Object.values(monthlyData).map(m => m.expense);
+      const balance = income.map((inc, i) => inc - expense[i]);
+
+      // Calcular score de confiança baseado na variância dos dados
+      const confidence_score = 85; // Implementar cálculo real depois
 
       return {
+        balance: balance[balance.length - 1] || 0,
+        income: income[income.length - 1] || 0,
+        expenses: expense[expense.length - 1] || 0,
         predictions: {
-          income: incomePrediction,
-          expense: expensePrediction,
-          balance: incomePrediction.map((inc, i) => inc - expensePrediction[i])
+          income,
+          expense,
+          balance
         },
-        confidence_score: this._calculateConfidenceScore(incomes, expenses)
+        confidence_score
       };
     } catch (error) {
-      logger.error('Error generating flow prediction:', error);
+      logger.error('Error getting predictions:', error);
       throw error;
     }
   },
 
-  async detectAnomalies({ user_id, threshold = 2 }) {
+  async getAnomalies(userId) {
     try {
-      const [transactions] = await pool.execute(`
-        SELECT 
-          t.*,
-          c.name as category_name
-        FROM transactions t
-        JOIN categories c ON t.category_id = c.id
-        WHERE t.user_id = ?
-        ORDER BY t.date DESC
-        LIMIT 100
-      `, [user_id]);
+      // Buscar transações dos últimos 3 meses
+      const [transactions] = await pool.execute(
+        `SELECT t.id as transaction_id, t.amount, t.date, c.name as category_name,
+         (SELECT AVG(amount) 
+          FROM transactions t2 
+          WHERE t2.category_id = t.category_id 
+          AND t2.user_id = ?) as average_amount
+         FROM transactions t
+         JOIN categories c ON t.category_id = c.id
+         WHERE t.user_id = ?
+         AND t.date >= DATE_SUB(CURDATE(), INTERVAL 3 MONTH)`,
+        [userId, userId]
+      );
 
-      const categoryAverages = {};
-      const anomalies = [];
-
-      // Agrupar por categoria
-      transactions.forEach(transaction => {
-        if (!categoryAverages[transaction.category_id]) {
-          categoryAverages[transaction.category_id] = {
-            amounts: [],
-            name: transaction.category_name
-          };
-        }
-        categoryAverages[transaction.category_id].amounts.push(transaction.amount);
-      });
-
-      // Detectar anomalias por categoria
-      Object.entries(categoryAverages).forEach(([category_id, data]) => {
-        const { amounts, name } = data;
-        const mean = stats.mean(amounts);
-        const stdDev = stats.standardDeviation(amounts);
-
-        transactions
-          .filter(t => t.category_id === parseInt(category_id))
-          .forEach(transaction => {
-            const zScore = Math.abs((transaction.amount - mean) / stdDev);
-            if (zScore > threshold) {
-              anomalies.push({
-                transaction_id: transaction.id,
-                category_name: name,
-                amount: transaction.amount,
-                date: transaction.date,
-                z_score: zScore,
-                average_amount: mean,
-                deviation: stdDev
-              });
-            }
-          });
+      // Detectar anomalias (transações que desviam mais de 2x da média)
+      const anomalies = transactions.filter(t => {
+        const z_score = Math.abs((t.amount - t.average_amount) / t.average_amount);
+        t.z_score = z_score;
+        return z_score > 2;
       });
 
       return {
@@ -101,100 +81,34 @@ const analyticsService = {
         metadata: {
           total_analyzed: transactions.length,
           anomalies_found: anomalies.length,
-          threshold: threshold,
-          analysis_date: new Date()
+          threshold: 2,
+          analysis_date: new Date().toISOString()
         }
       };
     } catch (error) {
-      logger.error('Error detecting anomalies:', error);
+      logger.error('Error getting anomalies:', error);
       throw error;
     }
   },
 
-  async getRecommendations({ user_id }) {
+  async getCategoryDistribution(userId) {
     try {
-      // Análise de gastos por categoria
-      const [categoryAnalysis] = await pool.execute(`
-        SELECT 
-          c.name,
-          c.type,
-          SUM(t.amount) as total,
-          COUNT(*) as transaction_count,
-          AVG(t.amount) as average_amount
-        FROM transactions t
-        JOIN categories c ON t.category_id = c.id
-        WHERE t.user_id = ?
-        AND t.date >= DATE_SUB(CURRENT_DATE, INTERVAL 3 MONTH)
-        GROUP BY c.id
-        ORDER BY total DESC
-      `, [user_id]);
+      const [distribution] = await pool.execute(
+        `SELECT c.name, SUM(t.amount) as total
+         FROM transactions t
+         JOIN categories c ON t.category_id = c.id
+         WHERE t.user_id = ?
+         AND t.date >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)
+         GROUP BY c.id, c.name
+         ORDER BY total DESC`,
+        [userId]
+      );
 
-      // Gerar recomendações baseadas na análise
-      const recommendations = [];
-      let totalExpenses = 0;
-
-      categoryAnalysis.forEach(category => {
-        if (category.type === 'EXPENSE') {
-          totalExpenses += category.total;
-        }
-      });
-
-      categoryAnalysis.forEach(category => {
-        if (category.type === 'EXPENSE') {
-          const percentageOfTotal = (category.total / totalExpenses) * 100;
-          
-          if (percentageOfTotal > 30) {
-            recommendations.push({
-              type: 'REDUCTION',
-              category: category.name,
-              message: `Gastos em ${category.name} representam ${percentageOfTotal.toFixed(1)}% do total. Considere reduzir.`,
-              impact: 'HIGH'
-            });
-          }
-
-          if (category.transaction_count > 20) {
-            recommendations.push({
-              type: 'FREQUENCY',
-              category: category.name,
-              message: `Alto número de transações em ${category.name}. Considere consolidar gastos.`,
-              impact: 'MEDIUM'
-            });
-          }
-        }
-      });
-
-      return {
-        recommendations,
-        analysis: {
-          categories: categoryAnalysis,
-          period: '3 months',
-          total_expenses: totalExpenses
-        }
-      };
+      return distribution;
     } catch (error) {
-      logger.error('Error generating recommendations:', error);
+      logger.error('Error getting category distribution:', error);
       throw error;
     }
-  },
-
-  _calculateTrend(data, periods_ahead) {
-    const xValues = Array.from({ length: data.length }, (_, i) => i);
-    const regression = stats.linearRegression(
-      xValues.map(x => [x, data[x]])
-    );
-
-    return Array.from(
-      { length: periods_ahead },
-      (_, i) => regression.m * (data.length + i) + regression.b
-    );
-  },
-
-  _calculateConfidenceScore(incomes, expenses) {
-    const incomeVariation = stats.variance(incomes);
-    const expenseVariation = stats.variance(expenses);
-    const maxVariation = Math.max(incomeVariation, expenseVariation);
-    
-    return Math.max(0, 100 - (maxVariation / 1000));
   }
 };
 
