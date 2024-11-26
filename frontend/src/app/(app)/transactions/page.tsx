@@ -3,27 +3,30 @@
 import { useTransactions } from '@/hooks/useTransactions'
 import { TransactionList } from '@/components/transactions/TransactionList'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { 
   Plus, 
   Loader2, 
-  Search,
   ArrowUpDown,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { CreateTransactionDialog } from '@/components/transactions/CreateTransactionDialog'
 import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { DateRange } from 'react-day-picker'
+import { SearchInput } from '@/components/transactions/SearchInput'
 
 export default function TransactionsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all')
+  const [filterType, setFilterType] = useState<'all' | 'INCOME' | 'EXPENSE'>('all')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value)
+  }, [])
 
   const { transactions, total, isLoading, refetch } = useTransactions({
     searchQuery,
@@ -64,15 +67,10 @@ export default function TransactionsPage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 items-center space-x-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar transações..."
-              className="pl-8"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+          <SearchInput 
+            value={searchQuery}
+            onChange={handleSearchChange}
+          />
           <DateRangePicker
             value={dateRange}
             onChange={setDateRange}
@@ -81,14 +79,19 @@ export default function TransactionsPage() {
 
         <div className="flex items-center space-x-2">
           <Select
-            value={filterType}
-            onValueChange={(value: 'all' | 'income' | 'expense') => 
+            defaultValue="all"
+            onValueChange={(value: 'all' | 'INCOME' | 'EXPENSE') => 
               setFilterType(value)
             }
           >
-            <option value="all">Todas</option>
-            <option value="income">Receitas</option>
-            <option value="expense">Despesas</option>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filtrar por tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="INCOME">Receitas</SelectItem>
+              <SelectItem value="EXPENSE">Despesas</SelectItem>
+            </SelectContent>
           </Select>
 
           <Button
